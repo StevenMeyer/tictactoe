@@ -1,5 +1,6 @@
 import { CLAIM_SQUARE, reducer, State } from './gameboard.reducer';
 import { PLAYER_O, PLAYER_X } from './player';
+import { GameStatus, WinType } from './status';
 
 describe('GameBoard reducer', function (): void {
     it('returns the initial state', function (): void {
@@ -10,6 +11,8 @@ describe('GameBoard reducer', function (): void {
                 [undefined, undefined, undefined],
                 [undefined, undefined, undefined],
             ],
+            status: GameStatus.IN_PROGRESS,
+            wins: [],
         });
     });
 
@@ -142,6 +145,244 @@ describe('GameBoard reducer', function (): void {
                 },
             };
             expect(reducer(state, action)).toEqual(state);
+        });
+    });
+
+    describe('checking the game state:', function (): void {
+        it('detects game in progress initially', function (): void {
+            const initialState = reducer();
+            expect(initialState.status).toBe(GameStatus.IN_PROGRESS);
+            expect(initialState.wins).toEqual([]);
+        });
+
+        it('detects a winner when a player has claimed three squares in a row', function (): void {
+            const initialState = {
+                ...reducer(),
+                squares: [
+                    [PLAYER_X,  undefined, PLAYER_X],
+                    [PLAYER_O,  PLAYER_O,  undefined],
+                    [undefined, undefined, undefined],
+                ] as const,
+            };
+            expect(reducer(initialState, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 0, column: 1, player: PLAYER_X,
+                }
+            })).toEqual({
+                ...initialState,
+                squares: [
+                    [PLAYER_X,  PLAYER_X,  PLAYER_X],
+                    [PLAYER_O,  PLAYER_O,  undefined],
+                    [undefined, undefined, undefined],
+                ],
+                status: GameStatus.WINNER_PLAYER_X,
+                wins: [{
+                    type: WinType.ROW,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 0,
+                    },
+                }]
+            });
+        });
+
+        it('does not detect a winner when a row is full but with different players', function (): void {
+            expect(reducer({
+                ...reducer(),
+                squares: [
+                    [PLAYER_X,  undefined, PLAYER_X],
+                    [PLAYER_O,  PLAYER_O,  undefined],
+                    [undefined, undefined, undefined],
+                ],
+            }, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 1, column: 2, player: PLAYER_X,
+                }
+            }).status).toBe(GameStatus.IN_PROGRESS);
+        });
+
+        it('detects a winner when a player has claimed three squares in a column', function (): void {
+            const initialState = {
+                ...reducer(),
+                squares: [
+                    [PLAYER_X,  PLAYER_O, PLAYER_X],
+                    [undefined, PLAYER_O, undefined],
+                    [undefined, undefined, undefined],
+                ] as const,
+            };
+            expect(reducer(initialState, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 2, column: 1, player: PLAYER_O,
+                }
+            })).toEqual({
+                ...initialState,
+                squares: [
+                    [PLAYER_X,  PLAYER_O, PLAYER_X],
+                    [undefined, PLAYER_O, undefined],
+                    [undefined, PLAYER_O, undefined],
+                ],
+                status: GameStatus.WINNER_PLAYER_O,
+                wins: [{
+                    type: WinType.COLUMN,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 1,
+                    },
+                }],
+            });
+        });
+
+        it('does not detect a winner when a column is full but with different players', function (): void {
+            expect(reducer({
+                ...reducer(),
+                squares: [
+                    [PLAYER_X,  PLAYER_O, PLAYER_X],
+                    [undefined, PLAYER_O, undefined],
+                    [undefined, undefined, undefined],
+                ],
+            }, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 2, column: 1, player: PLAYER_X,
+                }
+            }).status).toBe(GameStatus.IN_PROGRESS);
+        });
+
+        it('detects a winner when a player has claimed three squares in a diagonal', function (): void {
+            const initialState = {
+                ...reducer(),
+                squares: [
+                    [PLAYER_X, PLAYER_O,  PLAYER_O],
+                    [PLAYER_X, undefined, undefined],
+                    [PLAYER_O, PLAYER_X,  PLAYER_X],
+                ] as const,
+            };
+
+            expect(reducer(initialState, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 1, column: 1, player: PLAYER_X,
+                }
+            })).toEqual({
+                squares: [
+                    [PLAYER_X, PLAYER_O,  PLAYER_O],
+                    [PLAYER_X, PLAYER_X,  undefined],
+                    [PLAYER_O, PLAYER_X,  PLAYER_X],
+                ],
+                status: GameStatus.WINNER_PLAYER_X,
+                wins: [{
+                    type: WinType.DIAGONAL_TOP_LEFT,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 0,
+                    },
+                }],
+            });
+
+            expect(reducer(initialState, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 1, column: 1, player: PLAYER_O,
+                }
+            })).toEqual({
+                squares: [
+                    [PLAYER_X, PLAYER_O,  PLAYER_O],
+                    [PLAYER_X, PLAYER_O,  undefined],
+                    [PLAYER_O, PLAYER_X,  PLAYER_X],
+                ],
+                status: GameStatus.WINNER_PLAYER_O,
+                wins: [{
+                    type: WinType.DIAGONAL_TOP_RIGHT,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 2,
+                    },
+                }],
+            });
+        });
+
+        it('detects multiple wins', function (): void {
+            const initialState = {
+                ...reducer(),
+                squares: [
+                    [PLAYER_X,  PLAYER_O, PLAYER_X],
+                    [PLAYER_X,  PLAYER_X, PLAYER_O],
+                    [undefined, PLAYER_X, PLAYER_X], // yes, this board should not exist; it's just a test
+                ] as const,
+            };
+
+            expect(reducer(initialState, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    row: 2, column: 0, player: PLAYER_X,
+                }
+            })).toEqual({
+                squares: [
+                    [PLAYER_X, PLAYER_O, PLAYER_X],
+                    [PLAYER_X, PLAYER_X, PLAYER_O],
+                    [PLAYER_X, PLAYER_X, PLAYER_X],
+                ],
+                status: GameStatus.WINNER_PLAYER_X,
+                wins: expect.arrayContaining([{
+                    type: WinType.ROW,
+                    firstWinningSquare: {
+                        row: 2,
+                        column: 0,
+                    },
+                },
+                {
+                    type: WinType.COLUMN,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 0,
+                    },
+                },
+                {
+                    type: WinType.DIAGONAL_TOP_LEFT,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 0,
+                    },
+                },
+                {
+                    type: WinType.DIAGONAL_TOP_RIGHT,
+                    firstWinningSquare: {
+                        row: 0,
+                        column: 2,
+                    },
+                }]),
+            });
+        });
+
+        it('detects a draw', function (): void {
+            const initialState = {
+                ...reducer(),
+                squares: [
+                    [PLAYER_O, PLAYER_X,  PLAYER_O],
+                    [PLAYER_X, PLAYER_X,  PLAYER_O],
+                    [PLAYER_O, undefined, PLAYER_X],
+                ] as const,
+            };
+            expect(reducer(initialState, {
+                type: CLAIM_SQUARE,
+                payload: {
+                    player: PLAYER_O,
+                    row: 2,
+                    column: 1,
+                },
+            })).toEqual({
+                ...initialState,
+                squares: [
+                    [PLAYER_O, PLAYER_X, PLAYER_O],
+                    [PLAYER_X, PLAYER_X, PLAYER_O],
+                    [PLAYER_O, PLAYER_O, PLAYER_X],
+                ],
+                status: GameStatus.DRAW,
+                wins: [],
+            });
         });
     });
 });

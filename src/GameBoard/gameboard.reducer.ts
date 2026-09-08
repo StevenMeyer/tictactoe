@@ -1,11 +1,14 @@
 import { Player, PLAYER_O, PLAYER_X } from './player';
+import { detectStatus, GameStatus, GameWin } from './status';
 
 type Square = Player | undefined;
 type Row = ReadonlyArray<Square>;
 type Grid = ReadonlyArray<Row>;
 
 export interface State {
+    readonly wins: ReadonlyArray<GameWin>;
     readonly squares: Grid;
+    readonly status: GameStatus;
 }
 
 type Action<T extends string, P = undefined> = {
@@ -43,19 +46,28 @@ function isAction(candidate: unknown, type?: string, payloadGuard?: (c: Action<s
     return payloadGuard(candidate as Action<string>);
 }
 
+/**
+ * Does the candidate Action have an object payload?
+ * 
+ * This is intended to be used in a payload guard for `isAction()` to ensure the payload is an object and remove some boilerplate.
+ **/
+function hasObjectPayload(candidate: Action<string>): candidate is Action<string, Record<string, unknown>> {
+    return typeof candidate.payload === 'object'
+        && !!candidate.payload
+        && !Array.isArray(candidate.payload);
+}
+
 export const CLAIM_SQUARE = 'CLAIM SQUARE';
 type ClaimSquareAction = Action<typeof CLAIM_SQUARE, {
-    column: number,
-    row: number,
-    player: Player,
+    readonly column: number,
+    readonly row: number,
+    readonly player: Player,
 }>;
 function isClaimSquareAction(candidate: unknown): candidate is ClaimSquareAction {
     return isAction(candidate, CLAIM_SQUARE, (action): action is ClaimSquareAction => {
-        return typeof action.payload === 'object'
-            && !!action.payload
-            && !Array.isArray(action.payload)
-            && typeof (action.payload as Record<'row', number>).row === 'number'
-            && typeof (action.payload as Record<'column', number>).column === 'number'
+        return hasObjectPayload(action)
+            && typeof action.payload.row === 'number'
+            && typeof action.payload.column === 'number'
             && 'player' in action.payload;
     });
 }
@@ -71,19 +83,25 @@ function doClaimSquareAction(state: State, action: ClaimSquareAction): State {
         throw new Error(`${CLAIM_SQUARE}: invalid player`, { cause: claimPlayer });
     }
 
+    const squares = state.squares.map((row, rowIndex) => {
+        if (rowIndex === claimRow) {
+            return row.map((square, columnIndex): Square => {
+                if (columnIndex === claimColumn && square === undefined) {
+                    return claimPlayer;
+                }
+                return square;
+            });
+        }
+        return row;
+    });
+
+    const status = detectStatus(squares);
+
     return {
         ...state,
-        squares: state.squares.map((row, rowIndex) => {
-            if (rowIndex === claimRow) {
-                return row.map((square, columnIndex): Square => {
-                    if (columnIndex === claimColumn && square === undefined) {
-                        return claimPlayer;
-                    }
-                    return square;
-                });
-            }
-            return row;
-        }),
+        squares,
+        status: status.status,
+        wins: status.wins ?? [],
     };
 }
 
@@ -95,6 +113,8 @@ export function reducer(state?: State, action?: Action<string>): State {
                 [undefined, undefined, undefined],
                 [undefined, undefined, undefined],
             ],
+            status: GameStatus.IN_PROGRESS,
+            wins: [],
         }, action);
     }
     if (!action || !isAction(action)) {
