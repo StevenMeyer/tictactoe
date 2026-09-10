@@ -1,5 +1,6 @@
 import { Action, isAction } from '../util/action';
 import { CLAIM_SQUARE, ClaimSquareAction, isClaimSquareAction } from './claimSquareAction';
+import { CREATE_BOARD, CreateBoardAction, isCreateBoardAction } from './createBoardAction';
 import { Player, PLAYER_O, PLAYER_X } from './player';
 import { GameStatus } from './status';
 
@@ -12,7 +13,21 @@ export interface State {
     readonly status: GameStatus;
 }
 
-function doClaimSquareAction(state: State, action: ClaimSquareAction): State {
+function doCreateBoardAction(state: undefined, action: CreateBoardAction): State;
+function doCreateBoardAction<S extends State>(state: S, action: CreateBoardAction): S;
+function doCreateBoardAction(state: State | undefined, _: CreateBoardAction): State {
+    return {
+        ...state,
+        squares: [
+            [undefined, undefined, undefined],
+            [undefined, undefined, undefined],
+            [undefined, undefined, undefined],
+        ],
+        status: GameStatus.IN_PROGRESS,
+    };
+}
+
+function doClaimSquareAction<S extends State>(state: S, action: ClaimSquareAction): S {
     const { row: claimRow, column: claimColumn, player: claimPlayer } = action.payload;
     if (claimRow < 0 || claimRow > 2) {
         throw new Error(`${CLAIM_SQUARE}: row out of bounds`, { cause: claimRow });
@@ -53,19 +68,19 @@ function doClaimSquareAction(state: State, action: ClaimSquareAction): State {
  * know whose turn it is or whether any player has won. Such concepts belong to the
  * referee, who knows the rules and the state of play.
  */
+export function reducer(): State;
+export function reducer<S extends State>(state?: S, action?: Action<string>): S;
 export function reducer(state?: State, action?: Action<string>): State {
     if (!state) {
-        return reducer({
-            squares: [
-                [undefined, undefined, undefined],
-                [undefined, undefined, undefined],
-                [undefined, undefined, undefined],
-            ],
-            status: GameStatus.IN_PROGRESS,
-        }, action);
+        return doCreateBoardAction(undefined, isCreateBoardAction(action) ? action : {
+            type: CREATE_BOARD,
+        });
     }
     if (!action || !isAction(action)) {
         return state;
+    }
+    if (isCreateBoardAction(action)) {
+        return doCreateBoardAction(state, action);
     }
     if (isClaimSquareAction(action)) {
         return doClaimSquareAction(state, action);

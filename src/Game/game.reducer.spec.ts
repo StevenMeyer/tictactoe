@@ -3,10 +3,11 @@ import { CLAIM_SQUARE } from '../GameBoard/claimSquareAction';
 import { PLAYER_O, PLAYER_X } from '../GameBoard/player';
 import { GameStatus, WinType } from '../GameBoard/status';
 
-describe('GameBoard reducer', function (): void {
+describe('Game reducer', function (): void {
     it('returns the initial state', function (): void {
         const newState = reducer();
         expect(newState).toEqual({
+            currentPlayer: PLAYER_X,
             squares: [
                 [undefined, undefined, undefined],
                 [undefined, undefined, undefined],
@@ -24,13 +25,13 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 0,
                     column: 0,
-                    player: PLAYER_X,
                 },
             };
             const initialState = reducer();
             const newState = reducer(initialState, action);
             expect(newState).toEqual({
                 ...initialState,
+                currentPlayer: PLAYER_O, // player was changed to PLAYER_O
                 squares: [
                     [PLAYER_X, undefined, undefined],
                     [undefined, undefined, undefined],
@@ -43,11 +44,11 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 0,
                     column: 1,
-                    player: PLAYER_O,
                 },
             });
             expect(nextState).toEqual({
                 ...initialState,
+                currentPlayer: PLAYER_X,
                 squares: [
                     [PLAYER_X, PLAYER_O, undefined],
                     [undefined, undefined, undefined],
@@ -60,15 +61,15 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 2,
                     column: 2,
-                    player: PLAYER_O, // the reducer doesn't care whose turn it is!
                 },
             });
             expect(nextState).toEqual({
                 ...initialState,
+                currentPlayer: PLAYER_O,
                 squares: [
                     [PLAYER_X, PLAYER_O, undefined],
                     [undefined, undefined, undefined],
-                    [undefined, undefined, PLAYER_O],
+                    [undefined, undefined, PLAYER_X],
                 ],
             });
         });
@@ -80,7 +81,6 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: -1,
                     column: 0,
-                    player: PLAYER_X,
                 },
             })).toThrow(`${CLAIM_SQUARE}: row out of bounds`);
 
@@ -89,7 +89,6 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 3,
                     column: 0,
-                    player: PLAYER_X,
                 },
             })).toThrow(`${CLAIM_SQUARE}: row out of bounds`);
         });
@@ -101,7 +100,6 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 0,
                     column: -1,
-                    player: PLAYER_X,
                 },
             })).toThrow(`${CLAIM_SQUARE}: column out of bounds`);
 
@@ -110,21 +108,8 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 0,
                     column: 3,
-                    player: PLAYER_X,
                 },
             })).toThrow(`${CLAIM_SQUARE}: column out of bounds`);
-        });
-
-        it('throws if an invalid player tries to claim the square', function (): void {
-            const initialState = reducer();
-            expect(() => reducer(initialState, {
-                type: CLAIM_SQUARE,
-                payload: {
-                    row: 0,
-                    column: 1,
-                    player: 'NOT_A_PLAYER',
-                },
-            })).toThrow(`${CLAIM_SQUARE}: invalid player`);
         });
 
         it('does not permit a claimed square to be claimed by another player', function (): void {
@@ -142,7 +127,6 @@ describe('GameBoard reducer', function (): void {
                 payload: {
                     row: 0,
                     column: 2,
-                    player: PLAYER_X,
                 },
             };
             expect(reducer(state, action)).toEqual(state);
@@ -159,6 +143,7 @@ describe('GameBoard reducer', function (): void {
         it('detects a winner when a player has claimed three squares in a row', function (): void {
             const initialState = {
                 ...reducer(),
+                currentPlayer: PLAYER_X as typeof PLAYER_X,
                 squares: [
                     [PLAYER_X,  undefined, PLAYER_X],
                     [PLAYER_O,  PLAYER_O,  undefined],
@@ -168,10 +153,11 @@ describe('GameBoard reducer', function (): void {
             expect(reducer(initialState, {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 0, column: 1, player: PLAYER_X,
+                    row: 0, column: 1,
                 }
             })).toEqual({
                 ...initialState,
+                currentPlayer: PLAYER_O,
                 squares: [
                     [PLAYER_X,  PLAYER_X,  PLAYER_X],
                     [PLAYER_O,  PLAYER_O,  undefined],
@@ -191,6 +177,7 @@ describe('GameBoard reducer', function (): void {
         it('does not detect a winner when a row is full but with different players', function (): void {
             expect(reducer({
                 ...reducer(),
+                currentPlayer: PLAYER_X,
                 squares: [
                     [PLAYER_X,  undefined, PLAYER_X],
                     [PLAYER_O,  PLAYER_O,  undefined],
@@ -199,7 +186,7 @@ describe('GameBoard reducer', function (): void {
             }, {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 1, column: 2, player: PLAYER_X,
+                    row: 1, column: 2,
                 }
             }).status).toBe(GameStatus.IN_PROGRESS);
         });
@@ -207,6 +194,7 @@ describe('GameBoard reducer', function (): void {
         it('detects a winner when a player has claimed three squares in a column', function (): void {
             const initialState = {
                 ...reducer(),
+                currentPlayer: PLAYER_O as typeof PLAYER_O,
                 squares: [
                     [PLAYER_X,  PLAYER_O, PLAYER_X],
                     [undefined, PLAYER_O, undefined],
@@ -216,10 +204,11 @@ describe('GameBoard reducer', function (): void {
             expect(reducer(initialState, {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 2, column: 1, player: PLAYER_O,
+                    row: 2, column: 1,
                 }
             })).toEqual({
                 ...initialState,
+                currentPlayer: PLAYER_X,
                 squares: [
                     [PLAYER_X,  PLAYER_O, PLAYER_X],
                     [undefined, PLAYER_O, undefined],
@@ -239,6 +228,7 @@ describe('GameBoard reducer', function (): void {
         it('does not detect a winner when a column is full but with different players', function (): void {
             expect(reducer({
                 ...reducer(),
+                currentPlayer: PLAYER_X,
                 squares: [
                     [PLAYER_X,  PLAYER_O, PLAYER_X],
                     [undefined, PLAYER_O, undefined],
@@ -247,7 +237,7 @@ describe('GameBoard reducer', function (): void {
             }, {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 2, column: 1, player: PLAYER_X,
+                    row: 2, column: 1,
                 }
             }).status).toBe(GameStatus.IN_PROGRESS);
         });
@@ -255,6 +245,7 @@ describe('GameBoard reducer', function (): void {
         it('detects a winner when a player has claimed three squares in a diagonal', function (): void {
             const initialState = {
                 ...reducer(),
+                currentPlayer: PLAYER_X as typeof PLAYER_X,
                 squares: [
                     [PLAYER_X, PLAYER_O,  PLAYER_O],
                     [PLAYER_X, undefined, undefined],
@@ -265,9 +256,10 @@ describe('GameBoard reducer', function (): void {
             expect(reducer(initialState, {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 1, column: 1, player: PLAYER_X,
+                    row: 1, column: 1,
                 }
             })).toEqual({
+                currentPlayer: PLAYER_O,
                 squares: [
                     [PLAYER_X, PLAYER_O,  PLAYER_O],
                     [PLAYER_X, PLAYER_X,  undefined],
@@ -283,12 +275,17 @@ describe('GameBoard reducer', function (): void {
                 }],
             });
 
-            expect(reducer(initialState, {
+            expect(reducer({
+                ...initialState,
+                currentPlayer: PLAYER_O,
+            },
+            {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 1, column: 1, player: PLAYER_O,
+                    row: 1, column: 1,
                 }
             })).toEqual({
+                currentPlayer: PLAYER_X,
                 squares: [
                     [PLAYER_X, PLAYER_O,  PLAYER_O],
                     [PLAYER_X, PLAYER_O,  undefined],
@@ -308,6 +305,7 @@ describe('GameBoard reducer', function (): void {
         it('detects multiple wins', function (): void {
             const initialState = {
                 ...reducer(),
+                currentPlayer: PLAYER_X as typeof PLAYER_X,
                 squares: [
                     [PLAYER_X,  PLAYER_O, PLAYER_X],
                     [PLAYER_X,  PLAYER_X, PLAYER_O],
@@ -318,9 +316,10 @@ describe('GameBoard reducer', function (): void {
             expect(reducer(initialState, {
                 type: CLAIM_SQUARE,
                 payload: {
-                    row: 2, column: 0, player: PLAYER_X,
+                    row: 2, column: 0,
                 }
             })).toEqual({
+                currentPlayer: PLAYER_O,
                 squares: [
                     [PLAYER_X, PLAYER_O, PLAYER_X],
                     [PLAYER_X, PLAYER_X, PLAYER_O],
@@ -361,6 +360,7 @@ describe('GameBoard reducer', function (): void {
         it('detects a draw', function (): void {
             const initialState = {
                 ...reducer(),
+                currentPlayer: PLAYER_O as typeof PLAYER_O,
                 squares: [
                     [PLAYER_O, PLAYER_X,  PLAYER_O],
                     [PLAYER_X, PLAYER_X,  PLAYER_O],
@@ -376,6 +376,7 @@ describe('GameBoard reducer', function (): void {
                 },
             })).toEqual({
                 ...initialState,
+                currentPlayer: PLAYER_X,
                 squares: [
                     [PLAYER_O, PLAYER_X, PLAYER_O],
                     [PLAYER_X, PLAYER_X, PLAYER_O],
