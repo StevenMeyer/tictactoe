@@ -1,77 +1,33 @@
+import { Action, isAction } from '../util/action';
+import { CLAIM_SQUARE, ClaimSquareAction, isClaimSquareAction } from './claimSquareAction';
+import { CREATE_BOARD, CreateBoardAction, isCreateBoardAction } from './createBoardAction';
 import { Player, PLAYER_O, PLAYER_X } from './player';
-import { detectStatus, GameStatus, GameWin } from './status';
+import { GameStatus } from './status';
 
 type Square = Player | undefined;
 type Row = ReadonlyArray<Square>;
 type Grid = ReadonlyArray<Row>;
 
 export interface State {
-    readonly wins: ReadonlyArray<GameWin>;
     readonly squares: Grid;
     readonly status: GameStatus;
 }
 
-type Action<T extends string, P = undefined> = {
-    type: T;
-} & (P extends undefined ? { payload?: unknown } : { payload: P });
-
-/** Is the candidate *any* action? */
-function isAction(candidate: unknown): candidate is Action<string>;
-/**
- * Is the candidate an action of the given string `type`?
- *
- * The payload is not defined if you use this type guard. To define a payload, use the `payloadGuard` parameter.
- */
-function isAction<T extends string>(candidate: unknown, type: T): candidate is Action<T>;
-/**
- * Is the candidate an action of the given `type` and `payload`?
- */
-function isAction<T extends string, A extends Action<T>>(candidate: unknown, type: T, payloadGuard: (c: Action<T>) => c is A): candidate is A;
-function isAction(candidate: unknown, type?: string, payloadGuard?: (c: Action<string>) => boolean): candidate is Action<string> {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-        return false;
-    }
-    if (!('type' in candidate) || !candidate.type || typeof candidate.type !== 'string') {
-        return false;
-    }
-    if (type === undefined) {
-        return true;
-    }
-    if (type !== candidate.type) {
-        return false;
-    }
-    if (!payloadGuard || typeof payloadGuard.call !== 'function') {
-        return true;
-    }
-    return payloadGuard(candidate as Action<string>);
+function doCreateBoardAction(state: undefined, action: CreateBoardAction): State;
+function doCreateBoardAction<S extends State>(state: S, action: CreateBoardAction): S;
+function doCreateBoardAction(state: State | undefined, _: CreateBoardAction): State {
+    return {
+        ...state,
+        squares: [
+            [undefined, undefined, undefined],
+            [undefined, undefined, undefined],
+            [undefined, undefined, undefined],
+        ],
+        status: GameStatus.IN_PROGRESS,
+    };
 }
 
-/**
- * Does the candidate Action have an object payload?
- * 
- * This is intended to be used in a payload guard for `isAction()` to ensure the payload is an object and remove some boilerplate.
- **/
-function hasObjectPayload(candidate: Action<string>): candidate is Action<string, Record<string, unknown>> {
-    return typeof candidate.payload === 'object'
-        && !!candidate.payload
-        && !Array.isArray(candidate.payload);
-}
-
-export const CLAIM_SQUARE = 'CLAIM SQUARE';
-type ClaimSquareAction = Action<typeof CLAIM_SQUARE, {
-    readonly column: number,
-    readonly row: number,
-    readonly player: Player,
-}>;
-function isClaimSquareAction(candidate: unknown): candidate is ClaimSquareAction {
-    return isAction(candidate, CLAIM_SQUARE, (action): action is ClaimSquareAction => {
-        return hasObjectPayload(action)
-            && typeof action.payload.row === 'number'
-            && typeof action.payload.column === 'number'
-            && 'player' in action.payload;
-    });
-}
-function doClaimSquareAction(state: State, action: ClaimSquareAction): State {
+function doClaimSquareAction<S extends State>(state: S, action: ClaimSquareAction): S {
     const { row: claimRow, column: claimColumn, player: claimPlayer } = action.payload;
     if (claimRow < 0 || claimRow > 2) {
         throw new Error(`${CLAIM_SQUARE}: row out of bounds`, { cause: claimRow });
@@ -83,10 +39,14 @@ function doClaimSquareAction(state: State, action: ClaimSquareAction): State {
         throw new Error(`${CLAIM_SQUARE}: invalid player`, { cause: claimPlayer });
     }
 
+    if (state.squares[claimRow][claimColumn] !== undefined) {
+        return state;
+    }
+
     const squares = state.squares.map((row, rowIndex) => {
         if (rowIndex === claimRow) {
             return row.map((square, columnIndex): Square => {
-                if (columnIndex === claimColumn && square === undefined) {
+                if (columnIndex === claimColumn) {
                     return claimPlayer;
                 }
                 return square;
@@ -95,30 +55,32 @@ function doClaimSquareAction(state: State, action: ClaimSquareAction): State {
         return row;
     });
 
-    const status = detectStatus(squares);
-
     return {
         ...state,
         squares,
-        status: status.status,
-        wins: status.wins ?? [],
     };
 }
 
+/**
+ * This reducer represents the basic game board only.
+ * 
+ * It is just the piece of paper with a grid and noughts and crosses; it doesn't
+ * know whose turn it is or whether any player has won. Such concepts belong to the
+ * referee, who knows the rules and the state of play.
+ */
+export function reducer(): State;
+export function reducer<S extends State>(state?: S, action?: Action<string>): S;
 export function reducer(state?: State, action?: Action<string>): State {
     if (!state) {
-        return reducer({
-            squares: [
-                [undefined, undefined, undefined],
-                [undefined, undefined, undefined],
-                [undefined, undefined, undefined],
-            ],
-            status: GameStatus.IN_PROGRESS,
-            wins: [],
-        }, action);
+        return doCreateBoardAction(undefined, isCreateBoardAction(action) ? action : {
+            type: CREATE_BOARD,
+        });
     }
     if (!action || !isAction(action)) {
         return state;
+    }
+    if (isCreateBoardAction(action)) {
+        return doCreateBoardAction(state, action);
     }
     if (isClaimSquareAction(action)) {
         return doClaimSquareAction(state, action);
